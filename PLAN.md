@@ -1,129 +1,136 @@
-# GitVania — Implementation Plan
+# Git Detective — Implementation Plan
 
 ## Approach
 
-A 2D metroidvania where the game world is literally a git commit graph. Each room is a commit. Corridors between rooms are parent-child edges. The player unlocks git commands as traversal abilities, and each room teaches the concept it embodies.
+DOM-based rendering rather than Canvas. A terminal/investigation game is fundamentally text — typing commands, reading output, collecting clues. Canvas would mean reimplementing text layout, cursor blinking, scrolling, and selection for zero benefit. DOM gives us all of that for free, styled with CSS to look like a noir terminal.
 
-The core insight: a commit graph IS a metroidvania map. Branches fork. Merges join. Checkout teleports you. The metaphor isn't bolted on — it's structural.
+The game has three panels:
+1. **Case Briefing** (top-left) — description of the case, objectives
+2. **Terminal** (center/bottom) — where the player types git commands and sees output
+3. **Evidence Board** (right sidebar) — clues collected so far, updates as player discovers things
 
-Architecture is a simple entity-component loop: update + render on a shared canvas. No ECS framework — just plain classes with clear responsibilities. The game state is a graph of Room nodes. The player has a position within the current room and a set of unlocked abilities.
+Architecture is a state machine per case. Each case defines:
+- A simulated git repository (commits, files, diffs, blame data)
+- A set of clues that can be discovered by running specific commands
+- Win condition: collecting the required clues and identifying the culprit/commit
 
 ## File Structure
 
 ```
-src/games/gitvania/
-  index.ts          — default export, mounts game, owns the loop
-  game.ts           — GameState: current room, player, abilities, graph
-  player.ts         — Player: position, velocity, rendering, collision
-  room.ts           — Room: layout, platforms, doors, tutorial text
-  graph.ts          — CommitGraph: rooms as nodes, edges, branch refs
-  abilities.ts      — Ability definitions and unlock logic
-  hud.ts            — HUD: branch name, abilities bar, tutorial overlay
-  minimap.ts        — Commit graph minimap renderer
-  renderer.ts       — Room renderer: tiles, doors, decorations
-  levels.ts         — Level data: all rooms, their layouts, connections
-  colors.ts         — Color palette (matches landing page dark theme)
+src/games/git-detective/
+  index.ts              — entry point, exports default function, manages case selection
+  terminal.ts           — Terminal UI component: input handling, output rendering, command history
+  command-parser.ts     — Parses player input into structured commands (git log, git diff, etc.)
+  command-executor.ts   — Executes parsed commands against the simulated repo, returns output strings
+  evidence-board.ts     — Evidence/clue board UI component
+  case-briefing.ts      — Case briefing panel UI
+  types.ts              — Shared types: Case, Commit, FileState, Clue, etc.
+  cases/
+    case1.ts            — "The Broken Deploy" — simple git log + diff case
+    case2.ts            — "The Vanishing Feature" — git bisect case with longer history
+  styles.ts             — Injects scoped CSS for the detective game
 ```
-
-10 files. No file over ~300 lines. Each has one job.
 
 ## Implementation Steps
 
-### 1. Scaffold and boot (`index.ts`, `colors.ts`)
-- Default export function(root: HTMLElement)
-- Create canvas via shared utility (960x640)
-- Create InputManager
-- Initialize GameState
-- Start gameLoop
+1. **types.ts** — Define all data types first
+2. **styles.ts** — CSS injection for noir aesthetic (dark bg, green/amber monospace text, panel layout)
+3. **cases/case1.ts** — Build first case data: commits, files, diffs, blame, clues, win condition
+4. **cases/case2.ts** — Build second case data with longer history for bisect
+5. **terminal.ts** — Terminal component with input field, output area, command history (up/down arrow)
+6. **command-parser.ts** — Parse git commands: log, diff, blame, bisect, show, help
+7. **command-executor.ts** — Execute commands against case data, produce realistic output, trigger clue discovery
+8. **evidence-board.ts** — Clue board that updates when new evidence is found
+9. **case-briefing.ts** — Case briefing panel with objectives
+10. **index.ts** — Wire everything together: case select screen, game screen with all panels
 
-### 2. Color palette (`colors.ts`)
-- Pull from the landing page: #0d1117 (bg), #161b22 (surface), #30363d (border), #58a6ff (blue), #bc8cff (purple), #f778ba (pink), #3fb950 (green), #e6edf3 (text), #8b949e (muted)
-- Room-type-specific accent colors
+## Case Design
 
-### 3. Player (`player.ts`)
-- 16x24 pixel character rendered as pixel art rectangles
-- WASD/arrow key movement
-- Gravity + jump (platformer physics)
-- Collision with room bounds and platforms
-- Door interaction on overlap + key press
+### Case 1: "The Broken Deploy"
 
-### 4. Room model and renderer (`room.ts`, `renderer.ts`)
-- Room has: id (commit hash stub), platforms, doors (edges to other rooms), decorations, tutorial text, room type
-- Room types: STAGING (git add), COMMIT (git commit), BRANCH_POINT (git branch), MERGE_ZONE (git merge), CHECKOUT (git checkout), STASH (git stash)
-- Renderer draws: background, platforms, doors with labels, decorative elements, room name/hash
+**Scenario**: The team's web app broke in production Friday night. The deploy pipeline shows the last 6 commits from that day. The player must figure out which commit broke things and who did it.
 
-### 5. Commit graph (`graph.ts`)
-- Directed graph of rooms
-- Each room has parent(s) and child(ren)
-- Branch refs point to room IDs (like real git)
-- HEAD tracks current branch
-- Operations: addCommit, createBranch, checkout, merge
-- The graph IS the level layout — no separate map
+**Simulated repo**: 6 commits across 3 authors
+- `a1b2c3d` — Alice — "Update homepage hero section" (CSS change, harmless)
+- `e4f5g6h` — Bob — "Add caching layer for API responses" (adds cache.ts, harmless)
+- `i7j8k9l` — Charlie — "Fix typo in README" (README only, harmless)
+- `m0n1o2p` — Bob — "Optimize database queries" (changes db.ts — THE BAD COMMIT: accidentally deletes a WHERE clause)
+- `q3r4s5t` — Alice — "Update footer links" (HTML change, harmless)
+- `u6v7w8x` — Charlie — "Bump dependency versions" (package.json, harmless)
 
-### 6. Level data (`levels.ts`)
-- Hand-authored rooms forming a teaching sequence:
-  1. **"init" room** (initial commit) — entry point. Teaches: "You're in a commit. This is a snapshot."
-  2. **"staging" room** — connected from init. Has interactable objects. Teaches: git add (interact with objects to "stage" them, which opens the door forward)
-  3. **"first-commit" room** — reached after staging. Teaches: git commit (confirming staged changes creates this room, opening the path forward)
-  4. **"branch-point" room** — has TWO exits (doors fork). Teaches: git branch (player must create a branch to unlock the second exit)
-  5. **"feature-a" room** (on branch `feature`) — one branch path. Has a key item.
-  6. **"main-continues" room** (on branch `main`) — the other path. Has a different key item.
-  7. **"merge-zone" room** — only accessible when both branches are explored. Teaches: git merge. Both items combine to open the final door.
+**Solution path**:
+1. `git log` — see the 6 commits, note authors and messages
+2. `git diff m0n1o2p~1 m0n1o2p` or `git show m0n1o2p` — reveals the deleted WHERE clause
+3. `git blame src/db.ts` — shows Bob's line removing the WHERE clause
 
-This gives us 7 rooms, 2 branches, 1 merge, and teaches: add, commit, branch, checkout, merge.
+**Clues discovered**:
+- Viewing the log: "6 commits deployed Friday. Three developers were active."
+- Diffing the bad commit: "The WHERE clause in the user query was removed. This returns ALL users instead of just active ones."
+- Blaming db.ts: "Bob made the change to the database query at line 42."
 
-### 7. Abilities (`abilities.ts`)
-- Each ability is unlocked by reaching a specific room
-- **git-add**: Interact with objects (press E near them). Unlocked in staging room.
-- **git-commit**: Confirm staged changes (opens checkpoint doors). Unlocked in first-commit room.
-- **git-branch**: Create a fork at branch points (press B at a branch-point door). Unlocked at branch-point room.
-- **git-checkout**: Teleport between branches (press C to open branch selector). Unlocked at branch-point room.
-- **git-merge**: Combine branch paths (automatic when entering merge-zone with both branches explored). Unlocked at merge-zone.
+**Win condition**: Player identifies commit `m0n1o2p` as the breaking change (via a `solve` command or by collecting all key clues).
 
-Minimum viable: branch + checkout functional per acceptance criteria.
+### Case 2: "The Vanishing Feature"
 
-### 8. HUD (`hud.ts`)
-- Top bar: current branch name (e.g., "HEAD -> main"), room hash
-- Bottom bar: unlocked abilities with keybindings
-- Tutorial overlay: semi-transparent panel with explanation text, shown on room enter, dismissed with any key
-- Branch selector overlay: list of branches when checkout is activated
+**Scenario**: Users report that the search feature stopped working sometime in the last two weeks. There are 12 commits in that window. Use git bisect to narrow it down efficiently.
 
-### 9. Minimap (`minimap.ts`)
-- Draws the commit graph in the top-right corner
-- Nodes = circles (colored by room type)
-- Edges = lines
-- Current room highlighted
-- Branch labels drawn next to their tip nodes
-- Graph layout: topological sort, left-to-right with vertical offsets for branches
+**Simulated repo**: 12 commits across 4 authors. Commit #7 is the bad one — it refactored the search module and accidentally broke the query builder by swapping two arguments.
 
-### 10. Wire it all together (`game.ts`)
-- GameState holds: graph, player, current room, unlocked abilities, staged items, tutorial state
-- Update loop: player physics, door collision detection, ability input handling, room transitions
-- Render loop: clear, render room, render player, render HUD, render minimap
-- Room transition: fade effect, update current room, show tutorial
+**Solution path**:
+1. `git log` — see the 12 commits, too many to diff one by one
+2. `git bisect start` — begin the bisect
+3. `git bisect bad` — mark current (HEAD) as bad
+4. `git bisect good abc1234` — mark oldest commit as good
+5. System presents midpoint, player tests with `git diff` or `git show`, marks good/bad
+6. After ~4 steps, bisect identifies the breaking commit
+7. `git show` or `git diff` on the identified commit reveals the swapped arguments
+
+**Clues discovered through bisect steps and final examination**.
+
+**Win condition**: Bisect completes and player confirms the identified commit.
+
+## Terminal Simulation
+
+Commands supported:
+- `git log` — shows commit list (hash, author, date, message). Supports `--oneline`.
+- `git log -n <N>` — limit to N commits
+- `git show <hash>` — shows commit details + diff
+- `git diff <hash1> <hash2>` — shows diff between two commits
+- `git diff <hash>~1 <hash>` — shows what a single commit changed
+- `git blame <file>` — shows annotated file with author per line
+- `git bisect start` — begins bisect session
+- `git bisect good <hash>` / `git bisect bad` — marks commits during bisect
+- `help` — lists available commands
+- `solve <hash>` — submit answer (the commit the player thinks broke things)
+- `clear` — clears terminal
+- `ls` — lists files in the simulated repo
+
+Output formatting mimics real git: colored hashes (gold), author names, dates, diff hunks with +/- lines in green/red. All rendered as styled DOM elements.
 
 ## Key Design Decisions
 
-**Art style**: Pixel art built from rectangles and simple shapes — no sprite sheets needed. Dark theme (#0d1117 bg) with neon accents matching the landing page gradient (#58a6ff, #bc8cff, #f778ba). Rooms have a terminal/code aesthetic — grid lines, monospace labels.
+1. **DOM over Canvas** — Text-heavy game. DOM handles text rendering, scrolling, input fields, and selection natively. No reason to fight Canvas for this.
 
-**Platformer physics**: Simple gravity + jump. Not the point of the game — movement should feel fine, not remarkable. Rooms are single-screen (no scrolling within a room). The challenge is navigating the graph, not the platforming.
+2. **Noir aesthetic** — Dark background (#0a0a0a), amber/green monospace text, subtle scan-line effect via CSS. Terminal prompt styled as `detective@case-01 $`. Evidence board has a "pinboard" feel — dark cork background, clue cards.
 
-**Room transitions**: Walking into a door edge triggers a brief fade, then loads the connected room. Checkout is a special transition — screen flashes, player teleports to a room on a different branch.
+3. **No shared utilities used** — The Canvas and InputManager utilities are designed for action games. This game is entirely text/DOM driven. Using them would be forcing a square peg.
 
-**Teaching approach**: Each room has a one-time tutorial overlay. Short text. One concept. The player learns by doing: the ability they just unlocked is immediately required to progress. No reading without doing.
+4. **Scoped CSS via JS injection** — Rather than modifying the global style.css, inject scoped styles when the game mounts. Clean separation.
 
-**Minimap as commit graph**: The minimap IS the commit graph — not a spatial map. This reinforces that the game world is the graph. Nodes represent rooms. The player's position is which node is highlighted.
+5. **Realistic git output** — Output strings are hand-crafted to look like actual terminal output. Hashes are truncated 7-char hex. Dates are ISO format. Diffs use standard unified format with @@ hunks.
+
+6. **Command history** — Up/down arrows cycle through previous commands. Standard terminal behavior players expect.
+
+7. **Progressive clue discovery** — Running commands that reveal case-relevant information automatically adds clues to the evidence board. Player doesn't have to manually "collect" — just investigating naturally builds the case.
 
 ## Risks
 
-- **Room layout complexity**: Hand-authoring 7 room layouts with platforms and doors takes time. Mitigation: keep layouts simple — few platforms, clear door placement. Gameplay is about the graph, not the platforming.
-- **Minimap graph layout**: Auto-layout of DAGs is a real problem. Mitigation: use fixed positions for the 7 rooms since the graph is small and hand-authored. No need for a general layout algorithm.
-- **Ability interactions**: Branch + checkout + merge interacting correctly requires careful state management. Mitigation: the graph module is the single source of truth. Abilities just call graph operations.
-- **Scope creep**: 7 rooms is already substantial. If time is tight, cut to 5 rooms (drop one branch path, simplify merge to just needing checkout).
+- **Bisect simulation complexity** — Git bisect is stateful. Need to track bisect state (started, current good/bad bounds, midpoint) and simulate the binary search correctly. Not hard, just needs careful bookkeeping.
+- **Command parsing edge cases** — Players will type variations. Keep parser simple but handle common forms. Unrecognized commands get a helpful error.
+- **Scope creep** — Two cases is the target. Don't build an extensible case engine. Build two good cases.
 
 ## Estimate
 
-- 10 files
-- ~1500-2000 lines total
-- Moderate complexity — the graph logic and room transitions are the hard parts
-- Player movement and rendering are straightforward
+- **11 files** total (including 2 case data files)
+- **~800-1100 lines** of TypeScript
+- **Complexity**: Medium. The terminal UI and command execution are the bulk. Case data is mostly static strings. Bisect state machine is the trickiest single piece.
