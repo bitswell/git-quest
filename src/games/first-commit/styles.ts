@@ -478,6 +478,11 @@ const STYLES = `
   color: #1a1a2e;
 }
 
+.fc-btn.fc-btn-primary .fc-cmd {
+  color: #1a1a2e;
+  background: rgba(0, 0, 0, 0.15);
+}
+
 .fc-btn.fc-btn-primary:hover {
   background: #e07a30;
 }

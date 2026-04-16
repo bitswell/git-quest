@@ -116,7 +116,9 @@ function renderStagingArea(body: HTMLElement, state: GameState, opts: WorkspaceO
   if (state.stagingArea.length === 0) {
     const empty = document.createElement("div");
     empty.className = "fc-empty-zone";
-    empty.textContent = "Drag files here or click 'stage'";
+    empty.textContent = opts.onFileAdd || opts.draggable
+      ? "Drag files here or click 'git add'"
+      : "Nothing staged yet";
     body.appendChild(empty);
     return;
   }
