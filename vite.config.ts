@@ -26,6 +26,7 @@ export default defineConfig({
   plugins: [mossHostname()],
   server: {
     host: "0.0.0.0",
+    allowedHosts: ["moss"],
   },
   build: {
     outDir: "dist",
