@@ -1,6 +1,6 @@
 /** Chapter 3: Making Changes — create/edit files, see status colors */
 
-import { GameState, Chapter } from "../types";
+import { Chapter } from "../types";
 import { renderNarrative, renderHint } from "../narrative";
 import { createWorkspace } from "../workspace";
 

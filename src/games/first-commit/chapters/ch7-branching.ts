@@ -1,6 +1,6 @@
 /** Chapter 7: Branching — create branch, switch, see files change */
 
-import { GameState, Chapter } from "../types";
+import { Chapter } from "../types";
 import { renderNarrative, renderHint } from "../narrative";
 import { createWorkspace } from "../workspace";
 import {

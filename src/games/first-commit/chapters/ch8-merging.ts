@@ -5,11 +5,9 @@ import { renderNarrative, celebrate } from "../narrative";
 import { createWorkspace } from "../workspace";
 import {
   switchBranch,
+  createBranch,
   commitFiles,
   stageFile,
-  makeHash,
-  cloneFile,
-  getBranchCommits,
 } from "../state";
 
 const chapter: Chapter = {
@@ -35,10 +33,9 @@ const chapter: Chapter = {
     }
 
     // Find the other branch
-    const otherBranch = state.branches.find((b) => b.name !== "main");
+    let otherBranch = state.branches.find((b) => b.name !== "main");
     if (!otherBranch) {
       // Edge case: no other branch exists. Create one with a commit.
-      const { createBranch } = require("../state");
       createBranch(state, "experiment");
       switchBranch(state, "experiment");
       state.workingDir.push({
@@ -49,6 +46,7 @@ const chapter: Chapter = {
       stageFile(state, "experiment-idea.txt");
       commitFiles(state, "add experiment idea");
       switchBranch(state, "main");
+      otherBranch = state.branches.find((b) => b.name === "experiment");
     }
 
     const mergeBranchName = otherBranch ? otherBranch.name : "experiment";

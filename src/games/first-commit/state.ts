@@ -1,6 +1,6 @@
 /** State management for First Commit */
 
-import { GameState, FileObj, CommitObj, BranchState } from "./types";
+import { GameState, FileObj, CommitObj } from "./types";
 
 export function createInitialState(): GameState {
   return {

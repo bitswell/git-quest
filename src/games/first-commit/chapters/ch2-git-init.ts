@@ -106,7 +106,7 @@ const chapter: Chapter = {
 };
 
 function showWorkspace(content: HTMLElement, state: GameState): void {
-  const { update } = createWorkspace(content, state, { singleZone: false });
+  createWorkspace(content, state, { singleZone: false });
 
   // Status bar
   const statusBar = document.createElement("div");

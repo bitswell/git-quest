@@ -1,6 +1,6 @@
 /** First Commit — interactive visual tutorial for git beginners */
 
-import { GameState, Chapter } from "./types";
+import { Chapter } from "./types";
 import { injectStyles } from "./styles";
 import { createInitialState } from "./state";
 import { createChapterNav } from "./chapter-nav";

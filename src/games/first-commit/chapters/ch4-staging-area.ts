@@ -1,6 +1,6 @@
 /** Chapter 4: The Staging Area — drag/click files to staging (KEY chapter) */
 
-import { GameState, Chapter } from "../types";
+import { Chapter } from "../types";
 import { renderNarrative, renderHint } from "../narrative";
 import { createWorkspace } from "../workspace";
 import { stageFile, unstageFile } from "../state";

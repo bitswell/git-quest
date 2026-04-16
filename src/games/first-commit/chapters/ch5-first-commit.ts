@@ -1,6 +1,6 @@
 /** Chapter 5: Your First Commit — type message, create commit, celebration */
 
-import { GameState, Chapter } from "../types";
+import { Chapter } from "../types";
 import { renderNarrative, renderHint, celebrate } from "../narrative";
 import { createWorkspace } from "../workspace";
 import { stageFile, unstageFile, commitFiles } from "../state";

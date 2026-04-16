@@ -1,6 +1,6 @@
 /** Chapter 1: The Problem — story editor, disaster loses work */
 
-import { GameState, Chapter } from "../types";
+import { Chapter } from "../types";
 import { renderNarrative } from "../narrative";
 
 const STARTER_TEXT = `Once upon a time, in a small town by the sea, there lived a programmer who loved to write stories...`;
@@ -43,7 +43,6 @@ const chapter: Chapter = {
 
     // Track edits
     let editCount = 0;
-    let savedText = textarea.value;
 
     textarea.addEventListener("input", () => {
       editCount++;
@@ -62,8 +61,6 @@ const chapter: Chapter = {
     disasterBtn.className = "fc-btn fc-btn-danger";
     disasterBtn.textContent = "Simulate Disaster (power outage!)";
     disasterBtn.addEventListener("click", () => {
-      // Save current text before disaster
-      savedText = textarea.value;
       // Revert to a truncated/corrupted version
       const lines = STARTER_TEXT.split(" ");
       const corrupted = lines.slice(0, Math.ceil(lines.length / 3)).join(" ") + "...";

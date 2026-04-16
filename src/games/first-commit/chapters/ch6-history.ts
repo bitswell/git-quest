@@ -1,9 +1,9 @@
 /** Chapter 6: History — build up commits, click timeline to view past states */
 
-import { GameState, Chapter, CommitObj } from "../types";
+import { Chapter, CommitObj } from "../types";
 import { renderNarrative, renderHint } from "../narrative";
 import { createWorkspace } from "../workspace";
-import { stageFile, commitFiles, cloneFile } from "../state";
+import { stageFile, commitFiles } from "../state";
 
 const chapter: Chapter = {
   id: 6,
@@ -22,15 +22,12 @@ const chapter: Chapter = {
       "Every commit is a moment in time you can return to. Let's build up some history and learn to look back."
     );
 
-    let viewingCommit: CommitObj | null = null;
     let hasViewedHistory = false;
 
     function handleCommitClick(commit: CommitObj) {
-      viewingCommit = commit;
       hasViewedHistory = true;
       // Show files from that commit in a read-only view
       renderSnapshotView(content, commit, () => {
-        viewingCommit = null;
         renderMainView();
       });
       checkCompletion();
@@ -77,8 +74,6 @@ const chapter: Chapter = {
         const actionBar = document.createElement("div");
         actionBar.className = "fc-btn-row";
         content.appendChild(actionBar);
-
-        const prompt = guidedPrompts[state.commits.length] || guidedPrompts[0];
 
         // Quick-action: make a guided change + stage + commit
         const quickBtn = document.createElement("button");
