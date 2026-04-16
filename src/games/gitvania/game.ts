@@ -38,9 +38,11 @@ export interface GameState {
   /** Rooms the player has visited */
   visited: Set<string>;
   /** Transition effect */
-  transition: { active: boolean; alpha: number; targetRoomId: string; direction: "in" | "out" };
+  transition: { active: boolean; alpha: number; targetRoomId: string; sourceRoomId: string; direction: "in" | "out" };
   /** Total elapsed time (for animations) */
   time: number;
+  /** Time when the current tutorial was shown */
+  tutorialShownAt: number;
   /** "just pressed" tracking */
   prevKeys: Set<string>;
 }
@@ -63,8 +65,9 @@ export function createGameState(): GameState {
     hud,
     inventory: new Set(),
     visited: new Set(["init"]),
-    transition: { active: false, alpha: 0, targetRoomId: "", direction: "out" },
+    transition: { active: false, alpha: 0, targetRoomId: "", sourceRoomId: "", direction: "out" },
     time: 0,
+    tutorialShownAt: 0,
     prevKeys: new Set(),
   };
 }
@@ -107,7 +110,7 @@ export function updateGame(state: GameState, dt: number, input: InputManager): v
   // Tutorial overlay blocks gameplay input
   if (state.hud.showTutorial) {
     // Any key dismisses (but wait a moment so the key that triggered entry doesn't dismiss)
-    if (state.time > 0.3) {
+    if (state.time - state.tutorialShownAt > 0.3) {
       // Check if any key was just pressed
       const watched = [" ", "Enter", "e", "E", "w", "a", "s", "d", "Escape"];
       for (const k of watched) {
@@ -206,7 +209,7 @@ export function updateGame(state: GameState, dt: number, input: InputManager): v
 }
 
 function startTransition(state: GameState, targetRoomId: string): void {
-  state.transition = { active: true, alpha: 0, targetRoomId, direction: "out" };
+  state.transition = { active: true, alpha: 0, targetRoomId, sourceRoomId: state.currentRoom.id, direction: "out" };
 }
 
 function updateTransition(state: GameState, dt: number): void {
@@ -237,29 +240,29 @@ function enterRoom(state: GameState, room: Room): void {
   state.currentRoom = room;
   state.visited.add(room.id);
 
-  // Position player at the appropriate side
-  const prevRoom = state.transition.targetRoomId;
-  const enterDoor = room.doors.find((d) => d.targetId === state.graph.getNode(prevRoom)?.room.id || false);
+  // Find the door in the new room that leads back to where we came from
+  const sourceId = state.transition.sourceRoomId;
+  const returnDoor = room.doors.find((d) => d.targetId === sourceId);
 
-  if (enterDoor && enterDoor.side === "right") {
-    // Came from the left, so we entered from left side
-    state.player.x = 50;
+  if (returnDoor) {
+    // Spawn near the return door
+    state.player.x = returnDoor.x + (returnDoor.side === "left" ? 40 : -40);
   } else {
-    state.player.x = room.width - 50 - state.player.w;
+    // Default: enter from left
+    state.player.x = 50;
   }
   state.player.y = room.height - 48 - state.player.h;
   state.player.vy = 0;
 
-  // Update HUD
-  state.hud.branchName = room.branch === "feature" && state.graph.getBranch("feature")
-    ? "feature"
-    : state.graph.currentBranchName();
+  // Update HUD — show branch name based on the graph's HEAD
+  state.hud.branchName = state.graph.currentBranchName();
   state.hud.roomHash = room.hash;
 
   // Show tutorial if first visit
   if (!state.hud.tutorialDismissed.has(room.id) && room.tutorialText.length > 0) {
     state.hud.tutorialLines = room.tutorialText;
     state.hud.showTutorial = true;
+    state.tutorialShownAt = state.time;
   }
 }
 
@@ -338,7 +341,7 @@ function handleBranchSelector(state: GameState, input: InputManager): void {
         hud.showBranchSelector = false;
         showNotification(state.hud, `git checkout ${targetBranch}`, 2);
         // Flash transition for checkout
-        state.transition = { active: true, alpha: 0, targetRoomId: room.id, direction: "out" };
+        state.transition = { active: true, alpha: 0, targetRoomId: room.id, sourceRoomId: state.currentRoom.id, direction: "out" };
       }
     } else {
       hud.showBranchSelector = false;

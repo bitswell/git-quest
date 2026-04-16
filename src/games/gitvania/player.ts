@@ -11,7 +11,6 @@ const JUMP_VEL = -380;
 const MOVE_SPEED = 220;
 const PLAYER_W = 16;
 const PLAYER_H = 24;
-const FLOOR_Y = 640 - 48; // default ground level
 
 export interface PlayerState {
   x: number;
