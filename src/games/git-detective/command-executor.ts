@@ -1,4 +1,4 @@
-import { ParsedCommand, GameState, BisectState, Commit, Clue, ClueTrigger } from "./types";
+import { ParsedCommand, GameState, Commit, ClueTrigger } from "./types";
 
 export interface ExecResult {
   output: string;

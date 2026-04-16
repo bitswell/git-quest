@@ -167,6 +167,7 @@ const STYLES = `
 }
 
 /* Terminal output styling */
+.term-prompt-echo { color: #58a65a; }
 .term-hash { color: #d4a44a; }
 .term-author { color: #58a6ff; }
 .term-date { color: #6a6a5a; }

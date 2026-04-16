@@ -1,4 +1,4 @@
-import { GameState, Clue } from "./types";
+import { GameState } from "./types";
 
 /**
  * Evidence Board UI component.

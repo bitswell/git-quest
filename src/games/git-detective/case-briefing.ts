@@ -46,7 +46,7 @@ export function createCaseBriefing(
   el.appendChild(objList);
   container.appendChild(el);
 
-  function updateObjectives(completedClueIds: string[]) {
+  function updateObjectives(_completedClueIds: string[]) {
     // Mark objectives as done based on clue discovery
     const items = objList.querySelectorAll("li");
     const discovered = state.currentCase.clues.filter((c) => c.discovered);
