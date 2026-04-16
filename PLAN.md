@@ -1,96 +1,208 @@
-# Rebase Racer — Implementation Plan
+# PLAN — Merge Conflict (Falling-Block Puzzle)
 
 ## Approach
 
-A side-scrolling runner where the player character auto-runs along a git branch track rendered as horizontal lines (like `git log --graph` turned sideways). Obstacles appear ahead on the track, each requiring a specific git command typed into a command prompt at the bottom of the canvas. Correct command = obstacle clears, points awarded. Wrong command or timeout = crash, lose a life. Three crashes = game over.
+Canvas-rendered falling-block game. Two columns (branches) drop code blocks toward a central merge zone. When blocks from opposite branches arrive at the zone simultaneously, a conflict dialog appears. Player picks the correct resolution. Right answer = points. Wrong answer = health damage.
 
-The game is entirely Canvas-based. A small HTML input element overlays the canvas bottom for command entry — this avoids reimplementing text input/cursor/selection inside Canvas while keeping the visual feel tight.
+No frameworks. No abstractions beyond what the game needs. TypeScript, Canvas 2D, the shared `createCanvas` and `gameLoop` utilities, and the `InputManager` for keyboard input.
+
+The game runs as a state machine: MENU -> PLAYING -> CONFLICT -> GAME_OVER. During PLAYING, blocks fall. During CONFLICT, time pauses and the resolution UI appears. GAME_OVER shows the score and a restart option.
 
 ## File Structure
 
 ```
-src/games/rebase-racer/
-  index.ts          — entry point, exports default mount function
-  game.ts           — main game state machine (menu, playing, gameover)
-  runner.ts         — player character (position, animation, state)
-  track.ts          — branch track generator and renderer (the git graph)
-  obstacles.ts      — obstacle types, definitions, spawn logic
-  prompt.ts         — command input overlay (HTML input + validation)
-  renderer.ts       — all canvas drawing (track, runner, obstacles, HUD)
-  types.ts          — shared types and interfaces
+src/games/merge-conflict/
+  index.ts          — entry point, exports default(root), sets up canvas + game loop
+  state.ts          — game state type, initial state factory, state transitions
+  blocks.ts         — Block type, spawn logic, fall physics, collision detection
+  conflicts.ts      — conflict scenario data (10+ scenarios with correct answers)
+  renderer.ts       — all canvas drawing: branches, blocks, merge zone, HUD, conflict UI
+  resolution.ts     — conflict resolution logic: evaluate player choice, apply score/damage
+  constants.ts      — tuning: speeds, dimensions, colors, health, scoring
 ```
 
-8 files. No external dependencies beyond what the project already has.
+7 files total. Each under 200 lines. No file does two jobs.
 
 ## Implementation Steps
 
-1. **types.ts** — Define core interfaces: GameState, Obstacle, ObstacleType, TrackSegment, RunnerState.
-2. **obstacles.ts** — Define the 6 obstacle types with their visual appearance, accepted commands, and hint text.
-3. **track.ts** — Track generation: produces segments with branch lines, forks, merges, dead ends. Scrolls left continuously.
-4. **runner.ts** — Player character: position on track, running animation (simple sprite frames), crash animation, jump/clear animation.
-5. **prompt.ts** — Command input: creates an HTML `<input>` positioned over the canvas. Shows when obstacle is in range. Validates against accepted commands. Timer bar rendered on canvas.
-6. **renderer.ts** — Canvas drawing: background, track lines (green on dark), obstacles (colored shapes/icons), runner, HUD (score, lives, combo), timer bar, speed lines.
-7. **game.ts** — State machine: READY -> PLAYING -> GAME_OVER. Manages obstacle queue, difficulty scaling, score, lives.
-8. **index.ts** — Mount function: creates canvas via shared util, instantiates game, starts game loop via shared util, handles cleanup.
+1. **constants.ts** — All magic numbers in one place. Canvas size, column positions, fall speed, health, score values, colors (purple/violet palette).
 
-## Obstacle Design
+2. **conflicts.ts** — The 12 conflict scenarios. Each has: left code snippet, right code snippet, correct resolution (LEFT | RIGHT | BOTH), explanation string. Scenarios cover variable declarations, function signatures, import statements, config values, conditional logic, etc.
 
-| Obstacle | Visual | Git Command | When Introduced |
-|----------|--------|-------------|-----------------|
-| **Fork** | Track splits into two branches ahead | `git branch <name>` | Level 1 (start) |
-| **Dead End** | Track terminates, wall ahead | `git checkout <branch>` | Level 1 |
-| **Tangle** | Messy overlapping track segments | `git rebase` | Level 2 |
-| **Convergence** | Two tracks merging into one with a barrier | `git merge <branch>` | Level 2 |
-| **Clutter** | Debris/blocks scattered on the track | `git stash` | Level 3 |
-| **Time Warp** | Ghosted/faded track section | `git checkout <hash>` | Level 3 |
+3. **state.ts** — GameState type definition. Factory function for initial state. Includes: phase (PLAYING | CONFLICT | GAME_OVER), score, health, current blocks, active conflict, difficulty level, elapsed time.
 
-Each obstacle type defines:
-- `acceptedCommands`: array of regex patterns (e.g., `/^git branch \w+$/` for fork)
-- `displayName`: what shows on HUD
-- `hint`: shown after first wrong attempt
-- `points`: base score value
-- `timerDuration`: seconds to type the command (decreases with difficulty)
+4. **blocks.ts** — Block interface (id, branch, code snippet, y position, speed). Spawn function that picks a random conflict scenario and creates a left+right block pair. Update function that moves blocks down. Collision check: both blocks in merge zone range.
 
-Commands are validated with relaxed matching — `git branch feature` and `git branch fix-bug` both work for a fork obstacle. The specific name doesn't matter, just the correct command structure.
+5. **resolution.ts** — Takes a conflict scenario + player choice, returns { correct: boolean, points: number, damage: number }. Handles score multiplier for streaks.
 
-## Command Input
+6. **renderer.ts** — Draws everything:
+   - Background with two branch columns (left = "ours", right = "theirs")
+   - Branch labels and decorative git-branch lines
+   - Falling blocks with code text inside rounded rectangles
+   - Merge zone indicator (horizontal bar in the middle)
+   - HUD: score (top-left), health bar (top-right), difficulty level
+   - Conflict UI: centered panel showing both snippets side by side, three buttons (Left / Right / Both), keyboard hints (1/2/3)
+   - Game over screen with final score and restart prompt
 
-- HTML `<input>` element absolutely positioned over the bottom of the canvas area.
-- Appears when player reaches an obstacle's trigger zone (obstacle visible, ~200px ahead).
-- Styled to match the terminal aesthetic: monospace font, green text on dark background, `git > ` prefix shown as a label.
-- Submit on Enter. If correct, input hides, obstacle clears with a brief animation. If wrong, input shakes, hint shows after first wrong attempt. Timer continues.
-- When no obstacle is active, input is hidden and the runner just runs.
-- Focus is grabbed automatically when prompt appears. Escape or clicking canvas returns focus behavior.
+7. **index.ts** — Wires it all together. Creates canvas, creates initial state, runs gameLoop. Handles keyboard input for conflict resolution (keys 1/2/3) and restart (Enter). Mouse click support for the conflict buttons.
+
+## Conflict Scenarios
+
+Each scenario has a left snippet (ours), right snippet (theirs), and correct resolution.
+
+### 1. Variable initialization
+```
+LEFT:  const timeout = 3000;
+RIGHT: const timeout = 5000;
+CORRECT: RIGHT  (higher timeout is safer default)
+```
+
+### 2. Import path
+```
+LEFT:  import { log } from './utils';
+RIGHT: import { log } from './utils/logger';
+CORRECT: RIGHT  (more specific path)
+```
+
+### 3. Function parameter
+```
+LEFT:  function greet(name: string) {
+RIGHT: function greet(name: string, formal?: boolean) {
+CORRECT: RIGHT  (superset of left, backwards compatible)
+```
+
+### 4. Return type
+```
+LEFT:  function getCount(): number {
+RIGHT: function getCount(): number | null {
+CORRECT: RIGHT  (handles missing data)
+```
+
+### 5. Array vs single
+```
+LEFT:  let items = getItem();
+RIGHT: let items = getItems();
+CORRECT: RIGHT  (plural form, returns array)
+```
+
+### 6. Error handling — keep both
+```
+LEFT:  console.log(error);
+RIGHT: reportError(error);
+CORRECT: BOTH  (log AND report)
+```
+
+### 7. Feature flag + original
+```
+LEFT:  showBanner();
+RIGHT: if (flags.banner) showBanner();
+CORRECT: RIGHT  (feature flag is intentional)
+```
+
+### 8. CSS class names
+```
+LEFT:  class="btn primary"
+RIGHT: class="btn btn-primary"
+CORRECT: RIGHT  (BEM-style, more specific)
+```
+
+### 9. Null check
+```
+LEFT:  return user.name;
+RIGHT: return user?.name ?? 'Anonymous';
+CORRECT: RIGHT  (null-safe)
+```
+
+### 10. Both needed — test + implementation
+```
+LEFT:  expect(add(1,2)).toBe(3);
+RIGHT: function add(a, b) { return a + b; }
+CORRECT: BOTH  (test and implementation both needed)
+```
+
+### 11. Config format
+```
+LEFT:  port: "8080"
+RIGHT: port: 8080
+CORRECT: RIGHT  (number not string)
+```
+
+### 12. Async handling
+```
+LEFT:  const data = fetchData();
+RIGHT: const data = await fetchData();
+CORRECT: RIGHT  (must await async call)
+```
+
+## Merge Zone Mechanics
+
+1. **Block spawning**: A conflict scenario is selected. Two blocks are created simultaneously — one on the left column, one on the right. They start at y=0 (off-screen top) and fall at the current speed.
+
+2. **Falling**: Blocks move downward each frame at `baseSpeed + (difficulty * speedIncrease)` pixels per second. No lateral movement — blocks stay in their column.
+
+3. **Merge zone**: A horizontal band across the middle of the canvas (roughly y = 280 to y = 360 on a 640-tall canvas). When BOTH blocks of a pair have their center y inside this band, the conflict triggers.
+
+4. **Conflict trigger**: Game phase switches to CONFLICT. Blocks freeze. The resolution panel appears centered on screen. Player sees both code snippets side by side with three choice buttons.
+
+5. **Resolution**: Player picks 1 (Left), 2 (Right), or 3 (Both). If correct: blocks merge into a single "resolved" block that fades out, score increases, streak increments. If wrong: blocks flash red, health decreases, streak resets.
+
+6. **Post-resolution**: Brief animation (0.5s), then phase returns to PLAYING. After a short delay, the next block pair spawns.
+
+7. **Missed blocks**: If blocks fall past the merge zone without being resolved (shouldn't happen with the pause mechanic, but as a safety net), they count as a miss — health penalty.
 
 ## Difficulty Progression
 
-Three phases, controlled by cumulative score thresholds:
+- **Level 1 (0-30s)**: Fall speed = base. Simple conflicts (variable values, imports). 3s between spawns.
+- **Level 2 (30-60s)**: Speed +20%. Introduce function signature conflicts. 2.5s between spawns.
+- **Level 3 (60-90s)**: Speed +40%. Introduce null-safety and async conflicts. 2s between spawns.
+- **Level 4 (90-120s)**: Speed +60%. All scenario types. 1.5s between spawns.
+- **Level 5 (120s+)**: Speed +80%. All scenarios, faster spawn. 1.2s between spawns.
 
-- **Phase 1 (score 0-500)**: Only Fork and Dead End obstacles. Long timer (8s). Slow scroll speed. Large gaps between obstacles.
-- **Phase 2 (score 500-1500)**: Add Tangle and Convergence. Timer drops to 6s. Scroll speed increases 30%. Gaps tighten.
-- **Phase 3 (score 1500+)**: All 6 obstacle types. Timer at 4s. Scroll speed up another 30%. Can get back-to-back obstacles.
-
-Speed ramps linearly within each phase. Timer duration decreases smoothly.
+Difficulty is purely time-based. No level selection. The game simply gets harder the longer you survive.
 
 ## Key Design Decisions
 
-**Visual style**: Dark background (#0d1117 matching site), green (#3fb950) branch lines as the track — looks like a terminal git graph. Speed lines are faint green streaks. Obstacles use accent colors (red for dead ends, yellow for tangles, blue for merges). Runner is a simple humanoid sprite (pixel-art style, 3-4 frame run cycle).
+### Visual style
+- Dark background (#0d1117) matching the site theme
+- Purple/violet accent color (#bc8cff) for the merge zone glow and UI elements
+- Left branch: teal (#3fb950), Right branch: blue (#58a6ff)
+- Blocks are rounded rectangles with monospace code text inside
+- Merge zone is a glowing horizontal band
+- Conflict panel has a dark overlay behind it
 
-**Scoring**: Base points per obstacle type (harder = more points). Bonus multiplier for fast answers (under half the timer). Combo multiplier for consecutive correct answers (resets on wrong answer or timeout).
+### Scoring
+- Correct resolution: 100 base points * difficulty level
+- Streak bonus: consecutive correct adds 10% each (max 2x multiplier)
+- Wrong answer resets streak to 0
 
-**Game feel**: The auto-scroll never stops — even during command input. This creates pressure. Speed lines in background give sense of velocity. Camera shake on wrong answer. Brief green flash on correct answer. The track bobs slightly to feel alive.
+### Health
+- Start with 5 health points (shown as hearts or a bar)
+- Wrong resolution: -1 health
+- Game over at 0
 
-**No pause**: Deliberate. The pressure of the runner not stopping is the game.
+### Controls
+- Keyboard: 1 = Accept Left, 2 = Accept Right, 3 = Accept Both
+- Mouse: click the buttons in the conflict panel
+- Enter/Space to restart from game over screen
+
+### Code display
+- Monospace font in blocks (14px)
+- Code snippets max 40 characters wide, 1-2 lines
+- Syntax-like coloring: keywords in purple, strings in green, numbers in orange (simple regex, not a real parser)
 
 ## Risks
 
-- **Text input focus management**: Switching between canvas interaction and HTML input can be finicky. Mitigate by auto-focusing the input when it appears and keeping canvas interaction minimal (no clicks needed during gameplay).
-- **Command matching too strict or too loose**: Regex patterns need tuning. Start permissive — accept the command structure with any valid argument. Can tighten later.
-- **Track generation becoming repetitive**: Use weighted random selection from available obstacle pool. Ensure minimum gap between same obstacle type.
-- **Canvas performance with lots of track segments**: Cull off-screen segments. Only render what's visible + small buffer.
+1. **Text rendering on canvas**: Monospace code in small blocks might be hard to read. Mitigation: keep snippets very short, use large enough font, high contrast colors.
+
+2. **Conflict panel UX**: Needs to be immediately clear what the player should do. Mitigation: clear labels, keyboard shortcut hints visible, color coding matches the branch colors.
+
+3. **Difficulty tuning**: Hard to get right without playtesting. Mitigation: all values in constants.ts, easy to adjust.
+
+4. **Canvas text wrapping**: Canvas doesn't do text wrapping natively. Mitigation: keep snippets to single lines where possible; for multi-line, manually split and render each line.
 
 ## Estimate
 
-- 8 files, ~800-1000 lines total
-- Medium complexity — the hardest parts are track generation/rendering and the input overlay UX
-- The renderer is the biggest file (~200-250 lines)
+- 7 files
+- ~800-1000 total lines of TypeScript
+- Moderate complexity — the hardest parts are the conflict panel rendering and making the game feel responsive
+- Implementation: straightforward, no tricky async or state management patterns
