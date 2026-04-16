@@ -8,6 +8,14 @@ interface GameEntry {
 
 const GAMES: GameEntry[] = [
   {
+    id: "first-commit",
+    title: "First Commit",
+    genre: "Interactive Tutorial",
+    description:
+      "Learn git from scratch. Create files, stage changes, make commits, branch, and merge — all visually.",
+    color: "#f0883e",
+  },
+  {
     id: "gitvania",
     title: "GitVania",
     genre: "Metroidvania",
