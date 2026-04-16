@@ -1,6 +1,6 @@
 import { GameState } from "./types";
 import { parseCommand } from "./command-parser";
-import { executeCommand, ExecResult } from "./command-executor";
+import { executeCommand } from "./command-executor";
 
 export interface TerminalCallbacks {
   onCluesDiscovered: (clueIds: string[]) => void;
