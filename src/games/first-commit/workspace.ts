@@ -78,17 +78,46 @@ function createZone(type: string, title: string, subtitle: string): ZoneParts {
 }
 
 function setupDropTarget(zone: ZoneParts, opts: WorkspaceOptions) {
-  zone.el.addEventListener("dragover", (e) => {
+  // Both dragenter AND dragover must preventDefault to allow drops
+  const allowDrop = (e: DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
     zone.el.classList.add("fc-drag-over");
+  };
+  // Track enter/leave count so child element transitions don't flicker
+  let dragCounter = 0;
+  zone.el.addEventListener("dragenter", (e) => {
+    dragCounter++;
+    allowDrop(e as DragEvent);
   });
+  zone.el.addEventListener("dragover", (e) => allowDrop(e as DragEvent));
   zone.el.addEventListener("dragleave", () => {
-    zone.el.classList.remove("fc-drag-over");
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      zone.el.classList.remove("fc-drag-over");
+    }
   });
   zone.el.addEventListener("drop", (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    dragCounter = 0;
     zone.el.classList.remove("fc-drag-over");
-    const fileName = e.dataTransfer?.getData("text/plain");
+    const fileName = (e as DragEvent).dataTransfer?.getData("text/plain");
+    if (fileName && opts.onDragStage) {
+      opts.onDragStage(fileName);
+    }
+  });
+  // Also make the body a direct drop target for belt-and-suspenders
+  zone.body.addEventListener("dragenter", (e) => allowDrop(e as DragEvent));
+  zone.body.addEventListener("dragover", (e) => allowDrop(e as DragEvent));
+  zone.body.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter = 0;
+    zone.el.classList.remove("fc-drag-over");
+    const fileName = (e as DragEvent).dataTransfer?.getData("text/plain");
     if (fileName && opts.onDragStage) {
       opts.onDragStage(fileName);
     }
@@ -141,7 +170,20 @@ function createFileCard(
     card.className += " fc-draggable";
     card.draggable = true;
     card.addEventListener("dragstart", (e) => {
-      e.dataTransfer?.setData("text/plain", file.name);
+      if (e.dataTransfer) {
+        e.dataTransfer.setData("text/plain", file.name);
+        e.dataTransfer.effectAllowed = "move";
+      }
+    });
+  }
+
+  // Make the whole card clickable to stage (bigger target than just the button)
+  if (!isStaged && opts.onFileAdd && (file.status === "untracked" || file.status === "modified")) {
+    card.style.cursor = "pointer";
+    card.addEventListener("click", (e) => {
+      // Don't double-fire if they clicked the git add button itself
+      if ((e.target as HTMLElement).closest(".fc-file-btn")) return;
+      opts.onFileAdd!(file.name);
     });
   }
 

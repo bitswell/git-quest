@@ -139,7 +139,7 @@ const STYLES = `
   border: 1px solid #2a2a4e;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   animation: fc-zone-appear 0.5s ease-out;
 }
 
